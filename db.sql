@@ -1,31 +1,21 @@
--- MySQL dump 10.13  Distrib 9.5.0, for Win64 (x86_64)
+CREATE DATABASE  IF NOT EXISTS `securecorp` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `securecorp`;
+-- MySQL dump 10.13  Distrib 8.0.45, for Win64 (x86_64)
 --
 -- Host: localhost    Database: securecorp
 -- ------------------------------------------------------
--- Server version	9.5.0
-
-CREATE DATABASE IF NOT EXISTS securecorp;
-USE securecorp;
-
+-- Server version	8.0.45
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
+/*!50503 SET NAMES utf8 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;
-SET @@SESSION.SQL_LOG_BIN= 0;
-
---
--- GTID state at the beginning of the backup 
---
-
-
 
 --
 -- Table structure for table `jwt`
@@ -110,6 +100,36 @@ INSERT INTO `ticket` VALUES (1,NULL,3,1,'prova123','provaaaaaaaaaaaaaa','2026-02
 UNLOCK TABLES;
 
 --
+-- Table structure for table `ticket_message`
+--
+
+DROP TABLE IF EXISTS `ticket_message`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ticket_message` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `ticket_id` bigint unsigned NOT NULL,
+  `user_id` int unsigned NOT NULL,
+  `message` text NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_message_ticket` (`ticket_id`),
+  KEY `fk_message_user` (`user_id`),
+  CONSTRAINT `fk_message_ticket` FOREIGN KEY (`ticket_id`) REFERENCES `ticket` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_message_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `ticket_message`
+--
+
+LOCK TABLES `ticket_message` WRITE;
+/*!40000 ALTER TABLE `ticket_message` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ticket_message` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `ticket_status`
 --
 
@@ -180,7 +200,7 @@ CREATE TABLE `user` (
   UNIQUE KEY `uq_user_username` (`username`),
   KEY `idx_user_user_type_id` (`user_type_id`),
   CONSTRAINT `fk_user_user_type` FOREIGN KEY (`user_type_id`) REFERENCES `user_type` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -189,7 +209,7 @@ CREATE TABLE `user` (
 
 LOCK TABLES `user` WRITE;
 /*!40000 ALTER TABLE `user` DISABLE KEYS */;
-INSERT INTO `user` VALUES (13,2,'admin','$2a$10$pjikPcvPw1wUlP3hiHxXRulQxYB1Poa4bdMPb5vKRli30pNpDUY76',1,'2026-02-04 14:25:29'),(15,1,'utente','$2a$10$adXhrZQBYK0/IVZbRUvx2uxYcs6lZrZnBP15Lcs3PMht8tzqfmJ3S',1,'2026-02-04 14:32:12'),(16,1,'mario','$2a$10$mVcbzkGhKWWIWhCjnhx08eKc2JfPgmdxa.AfroZSz57Q4QW5A5IBi',1,'2026-02-05 14:23:23');
+INSERT INTO `user` VALUES (16,1,'mario','$2a$10$mVcbzkGhKWWIWhCjnhx08eKc2JfPgmdxa.AfroZSz57Q4QW5A5IBi',1,'2026-02-05 14:23:23'),(17,2,'admin','$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',1,'2026-02-11 19:10:00'),(18,1,'utente','$2a$10$Ld3HktGV4XmVPOXev.H79.tEXTPEV/6BnI8Hk7TZ3N1pcJZEHB8Iq',1,'2026-02-11 19:10:00');
 /*!40000 ALTER TABLE `user` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -586,7 +606,6 @@ DELIMITER ;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
-SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -597,4 +616,4 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-02-05 17:20:52
+-- Dump completed on 2026-02-11 20:14:32
