@@ -74,5 +74,4 @@ class AuthManager {
     }
 }
 
-// Global instance
 const auth = new AuthManager();

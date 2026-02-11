@@ -2,18 +2,18 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { authenticateToken, isAdmin } = require('../middleware/auth');
+const { logActivityFromRequest } = require('../utils/auditLogger');
 
-const validateTicketInput = (title, description) => 
-  !title || !description ? 'Titolo e descrizione sono obbligatori' : 
-  title.length > 120 ? 'Il titolo non può superare 120 caratteri' : 
-  description.length > 2000 ? 'La descrizione non può superare 2000 caratteri' : null;
+const validateTicketInput = (title, description) =>
+  !title || !description ? 'Titolo e descrizione sono obbligatori' :
+    title.length > 120 ? 'Il titolo non può superare 120 caratteri' :
+      description.length > 2000 ? 'La descrizione non può superare 2000 caratteri' : null;
 
-// CREA TICKET
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title, description, ticket_type } = req.body;
     const validationError = validateTicketInput(title, description);
-    
+
     if (validationError) return res.status(400).json({ error: validationError });
     if (!ticket_type) return res.status(400).json({ error: 'Tipo ticket è obbligatorio' });
 
@@ -22,18 +22,28 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const [statuses] = await db.query('SELECT id FROM ticket_status WHERE code = ?', ['OPEN']);
     const [result] = await db.query(
-      'INSERT INTO ticket (user_id, ticket_type_id, ticket_status_id, title, description) VALUES (?, ?, ?, ?, ?)', 
+      'INSERT INTO ticket (user_id, ticket_type_id, ticket_status_id, title, description) VALUES (?, ?, ?, ?, ?)',
       [req.user.id, ticketTypes[0].id, statuses[0].id, title, description]
     );
 
-    res.status(201).json({ message: 'Ticket creato con successo', ticket_id: result.insertId });
+    const ticketId = result.insertId;
+
+    await logActivityFromRequest(req, {
+      userId: req.user.id,
+      action: 'TICKET_CREATED',
+      entityType: 'TICKET',
+      entityId: ticketId,
+      description: `Ticket creato: "${title}"`,
+      metadata: { title, ticket_type, creator: req.user.username }
+    });
+
+    res.status(201).json({ message: 'Ticket creato con successo', ticket_id: ticketId });
   } catch (error) {
     console.error('Errore creazione ticket:', error);
     res.status(500).json({ error: 'Errore durante la creazione del ticket' });
   }
 });
 
-// LISTA TICKET (CON FILTRI E RICERCA)
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const isAdminUser = req.user.user_type_code === 'ADMIN';
@@ -58,7 +68,6 @@ router.get('/', authenticateToken, async (req, res) => {
       params.push(req.user.id);
     }
 
-    // Filtri Admin
     if (search) {
       conditions.push('(t.title LIKE ? OR u.username LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
@@ -86,15 +95,13 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// DETTAGLIO TICKET (CON MESSAGGI)
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
 
-    // Recupero Ticket
     const [tickets] = await db.query(
-      'SELECT t.id, t.title, t.description, t.created_at, t.updated_at, t.user_id, COALESCE(u.username, "Utente Eliminato") as creator, tt.code as ticket_type, tt.description as ticket_type_desc, ts.code as status, ts.description as status_desc FROM ticket t LEFT JOIN user u ON t.user_id = u.id JOIN ticket_type tt ON t.ticket_type_id = tt.id JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', 
+      'SELECT t.id, t.title, t.description, t.created_at, t.updated_at, t.user_id, COALESCE(u.username, "Utente Eliminato") as creator, tt.code as ticket_type, tt.description as ticket_type_desc, ts.code as status, ts.description as status_desc FROM ticket t LEFT JOIN user u ON t.user_id = u.id JOIN ticket_type tt ON t.ticket_type_id = tt.id JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?',
       [ticketId]
     );
 
@@ -105,7 +112,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Non autorizzato ad accedere a questo ticket' });
     }
 
-    // Recupero Messaggi
     const [messages] = await db.query(`
       SELECT m.id, m.message, m.created_at, u.username as sender, ut.code as sender_role
       FROM ticket_message m
@@ -123,7 +129,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// UPDATE TICKET (UTENTE)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
@@ -133,14 +138,24 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
     if (validationError) return res.status(400).json({ error: validationError });
 
-    const [tickets] = await db.query('SELECT t.id, t.user_id, ts.code as status FROM ticket t JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', [ticketId]);
+    const [tickets] = await db.query('SELECT t.id, t.title, t.user_id, ts.code as status FROM ticket t JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', [ticketId]);
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
-    
+
     const ticket = tickets[0];
     if (ticket.user_id !== req.user.id) return res.status(403).json({ error: 'Non autorizzato a modificare questo ticket' });
     if (ticket.status !== 'OPEN') return res.status(400).json({ error: 'Puoi modificare solo ticket aperti' });
 
     await db.query('UPDATE ticket SET title = ?, description = ? WHERE id = ?', [title, description, ticketId]);
+
+    await logActivityFromRequest(req, {
+      userId: req.user.id,
+      action: 'TICKET_UPDATED',
+      entityType: 'TICKET',
+      entityId: ticketId,
+      description: `Ticket modificato: "${title}"`,
+      metadata: { old_title: ticket.title, new_title: title, updated_by: req.user.username }
+    });
+
     res.json({ message: 'Ticket aggiornato con successo' });
   } catch (error) {
     console.error('Errore aggiornamento ticket:', error);
@@ -148,7 +163,6 @@ router.patch('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// UPDATE STATUS (ADMIN)
 router.patch('/:id/status', authenticateToken, isAdmin, async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
@@ -158,12 +172,24 @@ router.patch('/:id/status', authenticateToken, isAdmin, async (req, res) => {
     if (!status) return res.status(400).json({ error: 'Status è obbligatorio' });
     if (!['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(status)) return res.status(400).json({ error: 'Status non valido' });
 
-    const [tickets] = await db.query('SELECT id FROM ticket WHERE id = ?', [ticketId]);
+    const [tickets] = await db.query('SELECT t.id, t.title, t.user_id, ts.code as current_status FROM ticket t JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', [ticketId]);
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
+
+    const ticket = tickets[0];
+    const oldStatus = ticket.current_status;
 
     const [statuses] = await db.query('SELECT id FROM ticket_status WHERE code = ?', [status]);
     await db.query('UPDATE ticket SET ticket_status_id = ? WHERE id = ?', [statuses[0].id, ticketId]);
-    
+
+    await logActivityFromRequest(req, {
+      userId: req.user.id,
+      action: 'TICKET_STATUS_CHANGED',
+      entityType: 'TICKET',
+      entityId: ticketId,
+      description: `Status ticket modificato: "${ticket.title}" (${oldStatus} → ${status})`,
+      metadata: { ticket_id: ticketId, old_status: oldStatus, new_status: status, changed_by: req.user.username }
+    });
+
     res.json({ message: 'Status aggiornato con successo' });
   } catch (error) {
     console.error('Errore aggiornamento status:', error);
@@ -171,7 +197,6 @@ router.patch('/:id/status', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// INVIA RISPOSTA (ADMIN)
 router.post('/:id/messages', authenticateToken, isAdmin, async (req, res) => {
   try {
     const ticketId = parseInt(req.params.id);
@@ -180,10 +205,22 @@ router.post('/:id/messages', authenticateToken, isAdmin, async (req, res) => {
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
     if (!message || !message.trim()) return res.status(400).json({ error: 'Il messaggio non può essere vuoto' });
 
-    const [tickets] = await db.query('SELECT id FROM ticket WHERE id = ?', [ticketId]);
+    const [tickets] = await db.query('SELECT id, title, user_id FROM ticket WHERE id = ?', [ticketId]);
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
 
+    const ticket = tickets[0];
+
     await db.query('INSERT INTO ticket_message (ticket_id, user_id, message) VALUES (?, ?, ?)', [ticketId, req.user.id, message]);
+
+    await logActivityFromRequest(req, {
+      userId: req.user.id,
+      action: 'TICKET_MESSAGE_ADDED',
+      entityType: 'TICKET',
+      entityId: ticketId,
+      description: `Risposta aggiunta al ticket: "${ticket.title}"`,
+      metadata: { ticket_id: ticketId, sender: req.user.username, message_preview: message.substring(0, 50) }
+    });
+
     res.status(201).json({ message: 'Risposta inviata con successo' });
   } catch (error) {
     console.error('Errore invio messaggio:', error);
@@ -191,12 +228,11 @@ router.post('/:id/messages', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-// METADATA
-router.get('/meta/types', authenticateToken, async (req, res) => { 
-  try { const [types] = await db.query('SELECT code, description FROM ticket_type ORDER BY description'); res.json(types); } catch (error) { res.status(500).json({ error: 'Errore' }); } 
+router.get('/meta/types', authenticateToken, async (req, res) => {
+  try { const [types] = await db.query('SELECT code, description FROM ticket_type ORDER BY description'); res.json(types); } catch (error) { res.status(500).json({ error: 'Errore' }); }
 });
-router.get('/meta/statuses', authenticateToken, isAdmin, async (req, res) => { 
-  try { const [statuses] = await db.query('SELECT code, description FROM ticket_status ORDER BY id'); res.json(statuses); } catch (error) { res.status(500).json({ error: 'Errore' }); } 
+router.get('/meta/statuses', authenticateToken, isAdmin, async (req, res) => {
+  try { const [statuses] = await db.query('SELECT code, description FROM ticket_status ORDER BY id'); res.json(statuses); } catch (error) { res.status(500).json({ error: 'Errore' }); }
 });
 
 module.exports = router;

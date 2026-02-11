@@ -1,11 +1,9 @@
 console.log('app.js loaded');
 
-// Check authentication
 if (!auth.isAuthenticated()) {
     window.location.href = '/login.html';
 }
 
-// Update navbar with user info
 const navUsername = document.getElementById('navUsername');
 const navRole = document.getElementById('navRole');
 if (navUsername) navUsername.textContent = auth.getUser().username;
@@ -14,10 +12,8 @@ if (navRole) navRole.textContent = auth.isAdmin() ? 'ADMIN' : 'USER';
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) logoutBtn.addEventListener('click', () => auth.logout());
 
-// ==================== TEMPLATES ====================
 
 const templates = {
-    // DASHBOARD UTENTE
     dashboard: () => `
         <div class="container">
             <div class="header">
@@ -28,12 +24,12 @@ const templates = {
         </div>
     `,
 
-    // ADMIN DASHBOARD
     admin: () => `
         <div class="container">
             <div class="header">
                 <h1>Dashboard Amministratore</h1>
                 <div class="header-actions">
+                    <a href="#" data-route="admin-logs" class="btn btn-info">Log di Sistema</a>
                     <a href="#" data-route="users" class="btn btn-info">Gestione Utenti</a>
                     <button class="btn btn-success" id="newUserBtn">+ Nuovo Utente</button>
                 </div>
@@ -136,7 +132,6 @@ const templates = {
         </div>
     `,
 
-    // NUOVO TICKET
     newTicket: () => `
         <div class="container">
             <div class="card">
@@ -156,7 +151,6 @@ const templates = {
         </div>
     `,
 
-    // DETTAGLIO TICKET
     ticketDetail: (params) => `
         <div class="container">
             <div id="errorMessage" class="error-message"></div>
@@ -184,7 +178,6 @@ const templates = {
         </div>
     `,
 
-    // GESTIONE UTENTI
     users: () => `
         <div class="container">
             <div class="header">
@@ -252,14 +245,83 @@ const templates = {
                 </form>
             </div>
         </div>
+    `,
+
+    adminLogs: () => `
+        <div class="container">
+            <div class="header">
+                <h1>Log di Sistema</h1>
+                <div class="header-actions">
+                    <span id="totalLogs" style="font-size: 0.9rem; color: var(--text-muted);"></span>
+                </div>
+            </div>
+            
+            <div id="errorMessage" class="error-message"></div>
+            
+            <!-- Filters -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label for="filterAction">Azione</label>
+                        <select id="filterAction">
+                            <option value="">Tutte le azioni</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="filterEntityType">Tipo Entità</label>
+                        <select id="filterEntityType">
+                            <option value="">Tutti i tipi</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="filterDateFrom">Data Inizio</label>
+                        <input type="datetime-local" id="filterDateFrom">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label for="filterDateTo">Data Fine</label>
+                        <input type="datetime-local" id="filterDateTo">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" id="applyLogsFilters">Applica Filtri</button>
+                    <button class="btn btn-secondary" id="resetLogsFilters">Reset</button>
+                    <button class="btn btn-secondary" id="refreshLogs">Aggiorna</button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-container">
+                <div id="logsLoading" class="loading">Caricamento log...</div>
+                <table id="logsTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Data/Ora</th>
+                            <th>Utente</th>
+                            <th>Azione</th>
+                            <th>Entità</th>
+                            <th>Descrizione</th>
+                            <th>IP</th>
+                            <th>Metadata</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 2rem;">
+                <button class="btn btn-secondary" id="logsPrevPage" disabled>← Precedente</button>
+                <span id="logsPageInfo" style="font-size: 0.9rem; color: var(--text-muted);">Pagina 1 di 1</span>
+                <button class="btn btn-secondary" id="logsNextPage" disabled>Successiva →</button>
+            </div>
+        </div>
     `
 };
 
-// ==================== UTILITY & API ====================
 
-const showError = (m) => { const el = document.getElementById('errorMessage'); if(el){ el.textContent=m; el.style.display='block'; window.scrollTo(0,0); }};
-const showSuccess = (m) => { const el = document.getElementById('successMessage'); if(el){ el.textContent=m; el.style.display='block'; window.scrollTo(0,0); }};
-const hideMessages = () => { ['errorMessage','successMessage'].forEach(id=>{ const el=document.getElementById(id); if(el)el.style.display='none'; }); };
+const showError = (m) => { const el = document.getElementById('errorMessage'); if (el) { el.textContent = m; el.style.display = 'block'; window.scrollTo(0, 0); } };
+const showSuccess = (m) => { const el = document.getElementById('successMessage'); if (el) { el.textContent = m; el.style.display = 'block'; window.scrollTo(0, 0); } };
+const hideMessages = () => { ['errorMessage', 'successMessage'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; }); };
 const formatDate = (d) => new Date(d).toLocaleDateString('it-IT', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 async function apiRequest(url, options = {}) {
@@ -274,87 +336,86 @@ async function apiRequest(url, options = {}) {
     return response;
 }
 
-// ==================== GLOBAL HANDLERS (Admin & Users) ====================
 function attachCommonHandlers() {
-    // 1. Nuovo Utente
     const newUserBtn = document.getElementById('newUserBtn');
-    if(newUserBtn && !newUserBtn.dataset.bound) {
+    if (newUserBtn && !newUserBtn.dataset.bound) {
         newUserBtn.dataset.bound = true;
         newUserBtn.onclick = () => document.getElementById('newUserModal').classList.add('active');
     }
 
     const newUserForm = document.getElementById('newUserForm');
-    if(newUserForm && !newUserForm.dataset.bound) {
+    if (newUserForm && !newUserForm.dataset.bound) {
         newUserForm.dataset.bound = true;
         newUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
-                await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify({ 
-                    username: document.getElementById('newUsername').value, 
-                    password: document.getElementById('newPassword').value, 
-                    user_type: document.getElementById('userType').value 
-                })});
-                closeNewUserModal(); 
-                if(document.getElementById('usersTable')) loadUsers(); 
+                await apiRequest('/api/auth/register', {
+                    method: 'POST', body: JSON.stringify({
+                        username: document.getElementById('newUsername').value,
+                        password: document.getElementById('newPassword').value,
+                        user_type: document.getElementById('userType').value
+                    })
+                });
+                closeNewUserModal();
+                if (document.getElementById('usersTable')) loadUsers();
                 else showSuccess('Utente creato con successo');
-            } catch(e) { 
+            } catch (e) {
                 const errEl = document.getElementById('modalError');
-                if(errEl) { errEl.textContent='Errore durante la creazione'; errEl.style.display='block'; }
+                if (errEl) { errEl.textContent = 'Errore durante la creazione'; errEl.style.display = 'block'; }
             }
         });
     }
 
-    // 2. Status Ticket
     const statusForm = document.getElementById('statusForm');
-    if(statusForm && !statusForm.dataset.bound) {
+    if (statusForm && !statusForm.dataset.bound) {
         statusForm.dataset.bound = true;
         statusForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); 
+            e.preventDefault();
             try {
                 await apiRequest(`/api/tickets/${adminCurrentTicketId}/status`, { method: 'PATCH', body: JSON.stringify({ status: document.getElementById('ticketStatus').value }) });
-                closeStatusModal(); 
+                closeStatusModal();
                 loadAdminTickets();
-            } catch(e) { 
+            } catch (e) {
                 const errEl = document.getElementById('statusModalError');
-                if(errEl) { errEl.textContent='Errore aggiornamento status'; errEl.style.display='block'; }
+                if (errEl) { errEl.textContent = 'Errore aggiornamento status'; errEl.style.display = 'block'; }
             }
         });
     }
 
-    // 3. Edit e Password
     const editForm = document.getElementById('editForm');
-    if(editForm && !editForm.dataset.bound) {
+    if (editForm && !editForm.dataset.bound) {
         editForm.dataset.bound = true;
         editForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
-                await apiRequest(`/api/auth/users/${currentUserId}`, { method: 'PATCH', body: JSON.stringify({ 
-                    username: document.getElementById('editUsername').value, 
-                    user_type: document.getElementById('editType').value, 
-                    is_active: document.getElementById('editActive').value === '1' 
-                })});
+                await apiRequest(`/api/auth/users/${currentUserId}`, {
+                    method: 'PATCH', body: JSON.stringify({
+                        username: document.getElementById('editUsername').value,
+                        user_type: document.getElementById('editType').value,
+                        is_active: document.getElementById('editActive').value === '1'
+                    })
+                });
                 closeEditModal(); loadUsers();
-            } catch(e) { showError('Errore aggiornamento'); }
+            } catch (e) { showError('Errore aggiornamento'); }
         });
     }
 
     const passwordForm = document.getElementById('passwordForm');
-    if(passwordForm && !passwordForm.dataset.bound) {
+    if (passwordForm && !passwordForm.dataset.bound) {
         passwordForm.dataset.bound = true;
         passwordForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
-                await apiRequest(`/api/auth/users/${currentUserId}/password`, { method: 'PATCH', body: JSON.stringify({ new_password: document.getElementById('newPasswordInput').value })});
+                await apiRequest(`/api/auth/users/${currentUserId}/password`, { method: 'PATCH', body: JSON.stringify({ new_password: document.getElementById('newPasswordInput').value }) });
                 closePasswordModal(); showSuccess('Password cambiata');
-            } catch(e) { 
+            } catch (e) {
                 const errEl = document.getElementById('passwordError');
-                if(errEl) { errEl.textContent='Errore cambio password'; errEl.style.display='block'; }
+                if (errEl) { errEl.textContent = 'Errore cambio password'; errEl.style.display = 'block'; }
             }
         });
     }
 }
 
-// ==================== LOGIC: DASHBOARD ====================
 
 async function loadDashboardTickets() {
     try {
@@ -390,7 +451,6 @@ function createTicketCard(ticket) {
     return card;
 }
 
-// ==================== LOGIC: ADMIN ====================
 
 let adminCurrentTicketId = null;
 
@@ -400,14 +460,14 @@ async function loadAdminTickets() {
         const status = document.getElementById('filterStatus')?.value || '';
         const type = document.getElementById('filterType')?.value || '';
         const params = new URLSearchParams();
-        if(search) params.append('search', search);
-        if(status) params.append('status', status);
-        if(type) params.append('type', type);
+        if (search) params.append('search', search);
+        if (status) params.append('status', status);
+        if (type) params.append('type', type);
 
         const response = await apiRequest(`/api/tickets?${params.toString()}`);
         const tickets = await response.json();
 
-        if(!search && !status && !type) {
+        if (!search && !status && !type) {
             document.getElementById('totalTickets').textContent = tickets.length;
             document.getElementById('openTickets').textContent = tickets.filter(x => x.status === 'OPEN').length;
             document.getElementById('inProgressTickets').textContent = tickets.filter(x => x.status === 'IN_PROGRESS').length;
@@ -415,7 +475,7 @@ async function loadAdminTickets() {
         }
         renderAdminTicketsTable(tickets);
         setupAdminFilters();
-        attachCommonHandlers(); 
+        attachCommonHandlers();
 
     } catch (e) { console.error(e); showError('Errore caricamento ticket'); }
 }
@@ -445,7 +505,7 @@ function renderAdminTicketsTable(tickets) {
 
 function setupAdminFilters() {
     const filterBtn = document.getElementById('applyFiltersBtn');
-    if(filterBtn && !filterBtn.dataset.bound) {
+    if (filterBtn && !filterBtn.dataset.bound) {
         filterBtn.dataset.bound = true;
         filterBtn.addEventListener('click', loadAdminTickets);
         document.getElementById('resetFiltersBtn').addEventListener('click', () => {
@@ -457,7 +517,6 @@ function setupAdminFilters() {
     }
 }
 
-// ==================== LOGIC: TICKET DETAIL ====================
 
 async function loadTicketDetail(params) {
     if (!params.id) return router.navigate('dashboard');
@@ -489,14 +548,13 @@ function renderTicketDetail(ticket) {
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="font-size:0.9rem;">Creato da: <strong>${ticket.creator}</strong></div>
-            ${(ticket.user_id === auth.getUser().id && ticket.status === 'OPEN') ? 
-                `<button class="btn btn-primary" onclick="document.getElementById('editForm').style.display='block'">Modifica Ticket</button>` : ''}
+            ${(ticket.user_id === auth.getUser().id && ticket.status === 'OPEN') ?
+            `<button class="btn btn-primary" onclick="document.getElementById('editForm').style.display='block'">Modifica Ticket</button>` : ''}
         </div>
     `;
-    
+
     container.appendChild(card);
 
-    // Edit Form Block
     const editDiv = document.createElement('div'); editDiv.className = 'card edit-form'; editDiv.id = 'editForm'; editDiv.style.display = 'none'; editDiv.style.marginTop = '20px';
     editDiv.innerHTML = `
         <div class="header"><h3>Modifica Ticket</h3></div>
@@ -509,22 +567,21 @@ function renderTicketDetail(ticket) {
             </div>
         </form>`;
     container.appendChild(editDiv);
-    
+
     document.getElementById('updateForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
             await apiRequest(`/api/tickets/${ticket.id}`, { method: 'PATCH', body: JSON.stringify({ title: document.getElementById('editTitle').value, description: document.getElementById('editDesc').value }) });
-            loadTicketDetail({id: ticket.id});
-        } catch(e){ showError('Errore aggiornamento'); }
+            loadTicketDetail({ id: ticket.id });
+        } catch (e) { showError('Errore aggiornamento'); }
     });
 
-    // Messages
     const msgSection = document.getElementById('messagesSection');
     const msgList = document.getElementById('messagesList');
-    if(msgSection) {
+    if (msgSection) {
         msgSection.style.display = 'block';
         msgList.innerHTML = '';
-        if(ticket.messages && ticket.messages.length > 0) {
+        if (ticket.messages && ticket.messages.length > 0) {
             ticket.messages.forEach(m => {
                 const isAdminMsg = m.sender_role === 'ADMIN';
                 const div = document.createElement('div');
@@ -543,29 +600,31 @@ function renderTicketDetail(ticket) {
         }
 
         const replyForm = document.getElementById('replyForm');
-        if(replyForm) {
+        if (replyForm) {
             const newForm = replyForm.cloneNode(true);
             replyForm.parentNode.replaceChild(newForm, replyForm);
             newForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const msg = document.getElementById('replyMessage').value;
+                if (!msg.trim()) return;
                 try {
                     const res = await apiRequest(`/api/tickets/${ticket.id}/messages`, { method: 'POST', body: JSON.stringify({ message: msg }) });
-                    if(res.ok) loadTicketDetail({id: ticket.id});
-                } catch(e) { showError('Errore invio messaggio'); }
+                    if (res.ok) {
+                        document.getElementById('replyMessage').value = '';  // Reset form
+                        await loadTicketDetail({ id: ticket.id });            // Reload messages
+                    }
+                } catch (e) { showError('Errore invio messaggio'); }
             });
         }
     }
 }
 
-// ==================== LOGIC: USERS ====================
 
 async function loadUsers() {
     try {
         const response = await apiRequest('/api/auth/users');
         const users = await response.json();
-        
-        // Stats
+
         document.getElementById('totalUsers').textContent = users.length;
         document.getElementById('adminCount').textContent = users.filter(x => x.user_type === 'ADMIN').length;
         document.getElementById('userCount').textContent = users.filter(x => x.user_type === 'USER').length;
@@ -591,13 +650,12 @@ async function loadUsers() {
             `;
             tbody.appendChild(tr);
         });
-        
-        attachCommonHandlers(); 
+
+        attachCommonHandlers();
 
     } catch (error) { console.error(error); showError('Errore caricamento utenti'); }
 }
 
-// User Helpers (Global scope for onclick)
 let currentUserId = null;
 window.editUser = (id, user, type, active) => {
     currentUserId = id;
@@ -617,26 +675,225 @@ window.closeNewUserModal = () => document.getElementById('newUserModal').classLi
 window.openStatusModal = (id, status) => { adminCurrentTicketId = id; document.getElementById('ticketStatus').value = status; document.getElementById('statusModal').classList.add('active'); };
 window.closeStatusModal = () => document.getElementById('statusModal').classList.remove('active');
 
-// ==================== NEW TICKET LOGIC ====================
 async function loadNewTicketLogic() {
     try {
         const res = await apiRequest('/api/tickets/meta/types');
         const types = await res.json();
         const sel = document.getElementById('ticketType');
-        types.forEach(t => { const o=document.createElement('option'); o.value=t.code; o.textContent=t.description; sel.appendChild(o); });
-    } catch(e){}
+        types.forEach(t => { const o = document.createElement('option'); o.value = t.code; o.textContent = t.description; sel.appendChild(o); });
+    } catch (e) { }
 
     document.getElementById('ticketForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
             const body = { ticket_type: document.getElementById('ticketType').value, title: document.getElementById('title').value, description: document.getElementById('description').value };
             const res = await apiRequest('/api/tickets', { method: 'POST', body: JSON.stringify(body) });
-            if(res.ok) router.navigate(auth.isAdmin()?'admin':'dashboard');
-        } catch(e) { showError('Errore creazione'); }
+            if (res.ok) router.navigate(auth.isAdmin() ? 'admin' : 'dashboard');
+        } catch (e) { showError('Errore creazione'); }
     });
 }
 
-// ==================== INIT ====================
+
+let logsCurrentPage = 1;
+const logsPerPage = 50;
+let logsFilters = { action: '', entity_type: '', date_from: '', date_to: '' };
+
+const getActionBadgeClass = (action) => {
+    if (action.includes('SUCCESS') || action.includes('CREATED')) return 'status-badge status-active';
+    if (action.includes('FAILED') || action.includes('DELETED')) return 'status-badge status-inactive';
+    if (action.includes('UPDATED') || action.includes('CHANGED')) return 'user-badge badge-admin';
+    if (action.includes('LOGOUT')) return 'status-badge';
+    return 'ticket-status status-IN_PROGRESS';
+};
+
+const formatMetadata = (metadata) => {
+    if (!metadata) return '-';
+    try {
+        const obj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+        const str = JSON.stringify(obj);
+        return str.length > 40 ? str.substring(0, 40) + '...' : str;
+    } catch (e) {
+        return String(metadata).substring(0, 40);
+    }
+};
+
+async function loadAdminLogs(page = 1) {
+    try {
+        const logsLoading = document.getElementById('logsLoading');
+        const logsTable = document.getElementById('logsTable');
+        const errorEl = document.getElementById('errorMessage');
+
+        if (logsLoading) logsLoading.style.display = 'block';
+        if (logsTable) logsTable.style.display = 'none';
+        if (errorEl) errorEl.style.display = 'none';
+
+        const params = new URLSearchParams({ page, limit: logsPerPage });
+        if (logsFilters.action) params.append('action', logsFilters.action);
+        if (logsFilters.entity_type) params.append('entity_type', logsFilters.entity_type);
+        if (logsFilters.date_from) params.append('date_from', logsFilters.date_from);
+        if (logsFilters.date_to) params.append('date_to', logsFilters.date_to);
+
+        const response = await apiRequest(`/api/admin/logs?${params.toString()}`);
+        if (!response.ok) throw new Error('Errore caricamento log');
+
+        const data = await response.json();
+
+        renderLogsTable(data.logs);
+        renderLogsPagination(data.pagination);
+        updateTotalLogs(data.pagination.total);
+
+        logsCurrentPage = page;
+
+        if (logsLoading) logsLoading.style.display = 'none';
+        if (logsTable) logsTable.style.display = 'table';
+
+    } catch (error) {
+        console.error('Errore caricamento log:', error);
+        const logsLoading = document.getElementById('logsLoading');
+        const errorEl = document.getElementById('errorMessage');
+        if (logsLoading) logsLoading.style.display = 'none';
+        if (errorEl) { errorEl.textContent = 'Errore durante il caricamento dei log'; errorEl.style.display = 'block'; }
+    }
+}
+
+function renderLogsTable(logs) {
+    const tbody = document.getElementById('logsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Nessun log trovato</td></tr>';
+        return;
+    }
+
+    logs.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="white-space:nowrap; font-size:0.85rem;">${formatDate(log.created_at)}</td>
+            <td><strong>${log.username || 'Sistema'}</strong></td>
+            <td><span class="${getActionBadgeClass(log.action)}">${log.action}</span></td>
+            <td>${log.entity_type || '-'} ${log.entity_id ? `#${log.entity_id}` : ''}</td>
+            <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis;">${log.description || '-'}</td>
+            <td style="font-family:monospace; font-size:0.8rem; color:var(--text-muted);">${log.ip_address || '-'}</td>
+            <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis;" title="${log.metadata ? JSON.stringify(log.metadata) : ''}">${formatMetadata(log.metadata)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLogsPagination(pagination) {
+    const pageInfo = document.getElementById('logsPageInfo');
+    const prevBtn = document.getElementById('logsPrevPage');
+    const nextBtn = document.getElementById('logsNextPage');
+
+    if (pageInfo) pageInfo.textContent = `Pagina ${pagination.page} di ${pagination.totalPages}`;
+    if (prevBtn) prevBtn.disabled = !pagination.hasPrevPage;
+    if (nextBtn) nextBtn.disabled = !pagination.hasNextPage;
+}
+
+function updateTotalLogs(total) {
+    const el = document.getElementById('totalLogs');
+    if (el) el.textContent = `Totale: ${total} log`;
+}
+
+async function loadLogsFilters() {
+    try {
+        const actionsRes = await apiRequest('/api/admin/logs/actions');
+        if (actionsRes.ok) {
+            const actions = await actionsRes.json();
+            const sel = document.getElementById('filterAction');
+            if (sel) {
+                actions.forEach(action => {
+                    const opt = document.createElement('option');
+                    opt.value = action;
+                    opt.textContent = action;
+                    sel.appendChild(opt);
+                });
+            }
+        }
+
+        const typesRes = await apiRequest('/api/admin/logs/entity-types');
+        if (typesRes.ok) {
+            const types = await typesRes.json();
+            const sel = document.getElementById('filterEntityType');
+            if (sel) {
+                types.forEach(type => {
+                    const opt = document.createElement('option');
+                    opt.value = type;
+                    opt.textContent = type;
+                    sel.appendChild(opt);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Errore caricamento filtri:', error);
+    }
+}
+
+function setupLogsHandlers() {
+    const applyBtn = document.getElementById('applyLogsFilters');
+    if (applyBtn && !applyBtn.dataset.bound) {
+        applyBtn.dataset.bound = true;
+        applyBtn.addEventListener('click', () => {
+            logsFilters.action = document.getElementById('filterAction')?.value || '';
+            logsFilters.entity_type = document.getElementById('filterEntityType')?.value || '';
+
+            const dateFrom = document.getElementById('filterDateFrom')?.value;
+            const dateTo = document.getElementById('filterDateTo')?.value;
+
+            logsFilters.date_from = dateFrom ? new Date(dateFrom).toISOString() : '';
+            logsFilters.date_to = dateTo ? new Date(dateTo).toISOString() : '';
+
+            loadAdminLogs(1);
+        });
+    }
+
+    const resetBtn = document.getElementById('resetLogsFilters');
+    if (resetBtn && !resetBtn.dataset.bound) {
+        resetBtn.dataset.bound = true;
+        resetBtn.addEventListener('click', () => {
+            const filterAction = document.getElementById('filterAction');
+            const filterEntityType = document.getElementById('filterEntityType');
+            const filterDateFrom = document.getElementById('filterDateFrom');
+            const filterDateTo = document.getElementById('filterDateTo');
+
+            if (filterAction) filterAction.value = '';
+            if (filterEntityType) filterEntityType.value = '';
+            if (filterDateFrom) filterDateFrom.value = '';
+            if (filterDateTo) filterDateTo.value = '';
+
+            logsFilters = { action: '', entity_type: '', date_from: '', date_to: '' };
+            loadAdminLogs(1);
+        });
+    }
+
+    const refreshBtn = document.getElementById('refreshLogs');
+    if (refreshBtn && !refreshBtn.dataset.bound) {
+        refreshBtn.dataset.bound = true;
+        refreshBtn.addEventListener('click', () => loadAdminLogs(logsCurrentPage));
+    }
+
+    const prevBtn = document.getElementById('logsPrevPage');
+    if (prevBtn && !prevBtn.dataset.bound) {
+        prevBtn.dataset.bound = true;
+        prevBtn.addEventListener('click', () => {
+            if (logsCurrentPage > 1) loadAdminLogs(logsCurrentPage - 1);
+        });
+    }
+
+    const nextBtn = document.getElementById('logsNextPage');
+    if (nextBtn && !nextBtn.dataset.bound) {
+        nextBtn.dataset.bound = true;
+        nextBtn.addEventListener('click', () => loadAdminLogs(logsCurrentPage + 1));
+    }
+}
+
+async function initAdminLogs() {
+    await loadLogsFilters();
+    await loadAdminLogs(1);
+    setupLogsHandlers();
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('app-content');
@@ -647,6 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
     router.register('new-ticket', { path: '/new-ticket', showNavbar: true, template: templates.newTicket, onLoad: loadNewTicketLogic });
     router.register('ticket-detail', { path: '/ticket-detail', showNavbar: true, template: templates.ticketDetail, onLoad: loadTicketDetail });
     router.register('users', { path: '/users', showNavbar: true, requiresAdmin: true, template: templates.users, onLoad: loadUsers });
+    router.register('admin-logs', { path: '/admin-logs', showNavbar: true, requiresAdmin: true, template: templates.adminLogs, onLoad: initAdminLogs });
 
     router.navigate(auth.isAdmin() ? 'admin' : 'dashboard');
 });

@@ -8,14 +8,12 @@ class Router {
     init(contentContainer) {
         this.contentContainer = contentContainer;
         
-        // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
             if (e.state && e.state.route) {
                 this.loadRoute(e.state.route, false);
             }
         });
 
-        // Intercept link clicks
         document.addEventListener('click', (e) => {
             const link = e.target.closest('a[data-route]');
             if (link) {
@@ -50,7 +48,6 @@ class Router {
             return;
         }
 
-        // Check admin permission
         if (route.requiresAdmin && !auth.isAdmin()) {
             console.log('Admin route but user is not admin, redirecting to dashboard');
             this.navigate('dashboard');
@@ -59,19 +56,16 @@ class Router {
 
         this.currentRoute = routeName;
 
-        // Update navbar visibility
         const navbar = document.getElementById('mainNavbar');
         if (navbar) {
             navbar.style.display = route.showNavbar ? 'flex' : 'none';
         }
 
-        // Update URL and history
         if (addToHistory) {
             const url = route.path || `/${routeName}`;
             history.pushState({ route: routeName, params }, '', url);
         }
 
-        // Load template
         try {
             console.log('Generating template...');
             const html = await route.template(params);
@@ -85,7 +79,6 @@ class Router {
             this.contentContainer.innerHTML = html;
             console.log('Template inserted into DOM');
             
-            // Execute onLoad callback
             if (route.onLoad) {
                 console.log('Executing onLoad callback...');
                 await route.onLoad(params);
@@ -108,5 +101,4 @@ class Router {
     }
 }
 
-// Global router instance
 const router = new Router();
