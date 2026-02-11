@@ -69,7 +69,6 @@ body::before {
     }
 }
 
-/* --- NAVBAR FIXATA --- */
 .navbar {
     background: rgba(15, 23, 42, 0.85);
     backdrop-filter: blur(12px);
@@ -535,16 +534,16 @@ tr:hover td {
     cursor: pointer;
 }
 
-/* --- WRAPPER PER CENTRARE BOTTONI TABELLA (FIX RICHIESTO) --- */
+
 .actions-wrapper {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 8px;
-    /* Spazio tra i bottoni */
+
 }
 
-/* --- UTILS --- */
+
 .header {
     display: flex;
     justify-content: space-between;
