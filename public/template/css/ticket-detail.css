@@ -1,3 +1,25 @@
+/* --- NUOVI STILI PER MESSAGGI --- */
+#messagesList {
+    margin-bottom: 20px;
+}
+
+/* Animazione di entrata per i messaggi */
+@keyframes msgSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#messagesList > div {
+    animation: msgSlideIn 0.3s ease-out forwards;
+}
+
+#replyForm textarea:focus {
+    border-color: #d4af37 !important;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+    outline: none;
+}
+
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #1a1a1a; color: #fff; overflow-x: hidden;  text-transform: capitalize; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
