@@ -1,7 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-    /* Palette Colori */
     --bg-body: #0f172a;
     --bg-gradient: radial-gradient(circle at top right, #1e293b 0%, #0f172a 100%);
 
@@ -92,8 +91,6 @@ body::before {
     -webkit-text-fill-color: transparent;
     letter-spacing: -0.02em;
 }
-
-/* RIQUADRO UNICO PER UTENTE E RUOLO */
 .user-info {
     display: flex;
     align-items: center;
