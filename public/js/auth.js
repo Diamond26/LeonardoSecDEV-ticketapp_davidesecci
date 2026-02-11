@@ -1,5 +1,3 @@
-// auth.js - Authentication Management
-
 class AuthManager {
     constructor() {
         this.accessToken = sessionStorage.getItem('accessToken');

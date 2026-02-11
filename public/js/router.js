@@ -1,5 +1,3 @@
-// router.js - SPA Router with AJAX loading
-
 class Router {
     constructor() {
         this.routes = {};
