@@ -18,16 +18,17 @@ router.post('/', authenticateToken, async (req, res) => {
     if (validationError) return res.status(400).json({ error: validationError });
     if (!ticket_type) return res.status(400).json({ error: 'Tipo ticket è obbligatorio' });
 
-    const [ticketTypes] = await db.query('SELECT id FROM ticket_type WHERE code = ?', [ticket_type]);
-    if (ticketTypes.length === 0) return res.status(400).json({ error: 'Tipo ticket non valido' });
-
-    const [statuses] = await db.query('SELECT id FROM ticket_status WHERE code = ?', ['OPEN']);
+    // Create ticket using Stored Procedure
     const [result] = await db.query(
-      'INSERT INTO ticket (user_id, ticket_type_id, ticket_status_id, title, description) VALUES (?, ?, ?, ?, ?)',
-      [req.user.id, ticketTypes[0].id, statuses[0].id, title, description]
+      'CALL sp_create_ticket(?, ?, ?, ?, @ticketId)',
+      [req.user.id, ticket_type, title, description]
     );
+    const [selectResult] = await db.query('SELECT @ticketId as ticketId');
+    const ticketId = selectResult[0].ticketId;
 
-    const ticketId = result.insertId;
+    if (!ticketId) {
+      return res.status(400).json({ error: 'Tipo ticket non valido o errore durante la creazione' });
+    }
 
     await logActivityFromRequest(req, {
       userId: req.user.id,
@@ -62,46 +63,12 @@ router.get('/', authenticateToken, async (req, res) => {
     const isAdminUser = req.user.user_type_code === 'ADMIN';
     const { search, status, type } = req.query;
 
-    let query = `
-      SELECT t.id, t.title, t.description, t.created_at, t.updated_at, 
-      COALESCE(u.username, "Utente Eliminato") as creator, 
-      tt.code as ticket_type, tt.description as ticket_type_desc, 
-      ts.code as status, ts.description as status_desc 
-      FROM ticket t 
-      LEFT JOIN user u ON t.user_id = u.id 
-      JOIN ticket_type tt ON t.ticket_type_id = tt.id 
-      JOIN ticket_status ts ON t.ticket_status_id = ts.id
-    `;
-
-    const conditions = [];
-    const params = [];
-
-    if (!isAdminUser) {
-      conditions.push('t.user_id = ?');
-      params.push(req.user.id);
-    }
-
-    if (search) {
-      conditions.push('(t.title LIKE ? OR u.username LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`);
-    }
-    if (status) {
-      conditions.push('ts.code = ?');
-      params.push(status);
-    }
-    if (type) {
-      conditions.push('tt.code = ?');
-      params.push(type);
-    }
-
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-
-    query += ' ORDER BY t.created_at DESC';
-
-    const [tickets] = await db.query(query, params);
-    res.json(tickets);
+    // Get tickets using Stored Procedure
+    const [tickets] = await db.query(
+      'CALL sp_get_tickets(?, ?, ?, ?, ?)',
+      [req.user.id, search || null, status || null, type || null, isAdminUser]
+    );
+    res.json(tickets[0]);
   } catch (error) {
     console.error('Errore recupero tickets:', error);
     res.status(500).json({ error: 'Errore durante il recupero dei ticket' });
@@ -113,10 +80,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const ticketId = parseInt(req.params.id);
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
 
-    const [tickets] = await db.query(
-      'SELECT t.id, t.title, t.description, t.created_at, t.updated_at, t.user_id, COALESCE(u.username, "Utente Eliminato") as creator, tt.code as ticket_type, tt.description as ticket_type_desc, ts.code as status, ts.description as status_desc FROM ticket t LEFT JOIN user u ON t.user_id = u.id JOIN ticket_type tt ON t.ticket_type_id = tt.id JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?',
-      [ticketId]
-    );
+    // Get ticket details using Stored Procedure
+    const [accessCheckResults] = await db.query('CALL sp_check_ticket_access(?)', [ticketId]);
+    const tickets = accessCheckResults[0];
 
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
     const ticket = tickets[0];
@@ -125,14 +91,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Non autorizzato ad accedere a questo ticket' });
     }
 
-    const [messages] = await db.query(`
-      SELECT m.id, m.message, m.created_at, u.username as sender, ut.code as sender_role
-      FROM ticket_message m
-      JOIN user u ON m.user_id = u.id
-      JOIN user_type ut ON u.user_type_id = ut.id
-      WHERE m.ticket_id = ?
-      ORDER BY m.created_at ASC
-    `, [ticketId]);
+    const [messageResults] = await db.query('CALL sp_get_ticket_messages(?)', [ticketId]);
+    const messages = messageResults[0];
 
     ticket.messages = messages;
     res.json(ticket);
@@ -151,7 +111,8 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
     if (validationError) return res.status(400).json({ error: validationError });
 
-    const [tickets] = await db.query('SELECT t.id, t.title, t.user_id, ts.code as status FROM ticket t JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', [ticketId]);
+    const [accessCheckResults] = await db.query('CALL sp_check_ticket_access(?)', [ticketId]);
+    const tickets = accessCheckResults[0];
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
 
     const ticket = tickets[0];
@@ -185,14 +146,22 @@ router.patch('/:id/status', authenticateToken, isAdmin, async (req, res) => {
     if (!status) return res.status(400).json({ error: 'Status è obbligatorio' });
     if (!['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(status)) return res.status(400).json({ error: 'Status non valido' });
 
-    const [tickets] = await db.query('SELECT t.id, t.title, t.user_id, ts.code as current_status FROM ticket t JOIN ticket_status ts ON t.ticket_status_id = ts.id WHERE t.id = ?', [ticketId]);
+    const [accessCheckResults] = await db.query('CALL sp_check_ticket_access(?)', [ticketId]);
+    const tickets = accessCheckResults[0];
+    // Rename status to current_status to match expected logic below
+    if (tickets.length > 0) tickets[0].current_status = tickets[0].status;
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
 
     const ticket = tickets[0];
     const oldStatus = ticket.current_status;
 
+    // Update status using Stored Procedure
+    await db.query('CALL sp_update_ticket_status(?, ?)', [ticketId, status]);
+
+    /* Previous logic for reference:
     const [statuses] = await db.query('SELECT id FROM ticket_status WHERE code = ?', [status]);
     await db.query('UPDATE ticket SET ticket_status_id = ? WHERE id = ?', [statuses[0].id, ticketId]);
+    */
 
     await logActivityFromRequest(req, {
       userId: req.user.id,
@@ -204,8 +173,8 @@ router.patch('/:id/status', authenticateToken, isAdmin, async (req, res) => {
     });
 
     // Get status description for notification
-    const [statusDesc] = await db.query('SELECT description FROM ticket_status WHERE code = ?', [status]);
-    const statusDescription = statusDesc[0]?.description || status;
+    // Status description is handled in UI or could be fetched via SP, keeping simple for now
+    const statusDescription = status;
 
     // Send notification to ticket creator
     notifyUser(ticket.user_id, {
@@ -235,7 +204,8 @@ router.get('/:id/messages', authenticateToken, async (req, res) => {
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
 
     // Check if user has access to this ticket
-    const [tickets] = await db.query('SELECT user_id FROM ticket WHERE id = ?', [ticketId]);
+    const [accessCheckResults] = await db.query('CALL sp_check_ticket_access(?)', [ticketId]);
+    const tickets = accessCheckResults[0];
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
 
     const ticket = tickets[0];
@@ -244,8 +214,8 @@ router.get('/:id/messages', authenticateToken, async (req, res) => {
     }
 
     // Load messages using Stored Procedure
-    const [results] = await db.query('CALL sp_get_ticket_messages(?)', [ticketId]);
-    const messages = results[0]; // SP returns results in the first array element
+    const [messageResults] = await db.query('CALL sp_get_ticket_messages(?)', [ticketId]);
+    const messages = messageResults[0]; // SP returns results in the first array element
 
     res.json(messages);
   } catch (error) {
@@ -262,12 +232,14 @@ router.post('/:id/messages', authenticateToken, isAdmin, async (req, res) => {
     if (isNaN(ticketId)) return res.status(400).json({ error: 'ID ticket non valido' });
     if (!message || !message.trim()) return res.status(400).json({ error: 'Il messaggio non può essere vuoto' });
 
-    const [tickets] = await db.query('SELECT id, title, user_id FROM ticket WHERE id = ?', [ticketId]);
+    const [accessCheckResults] = await db.query('CALL sp_check_ticket_access(?)', [ticketId]);
+    const tickets = accessCheckResults[0];
     if (tickets.length === 0) return res.status(404).json({ error: 'Ticket non trovato' });
 
     const ticket = tickets[0];
 
-    await db.query('INSERT INTO ticket_message (ticket_id, user_id, message) VALUES (?, ?, ?)', [ticketId, req.user.id, message]);
+    // Add message using Stored Procedure
+    await db.query('CALL sp_add_ticket_message(?, ?, ?)', [ticketId, req.user.id, message]);
 
     await logActivityFromRequest(req, {
       userId: req.user.id,
@@ -298,10 +270,10 @@ router.post('/:id/messages', authenticateToken, isAdmin, async (req, res) => {
 });
 
 router.get('/meta/types', authenticateToken, async (req, res) => {
-  try { const [types] = await db.query('SELECT code, description FROM ticket_type ORDER BY description'); res.json(types); } catch (error) { res.status(500).json({ error: 'Errore' }); }
+  try { const [results] = await db.query('CALL sp_get_ticket_types()'); res.json(results[0]); } catch (error) { res.status(500).json({ error: 'Errore' }); }
 });
 router.get('/meta/statuses', authenticateToken, isAdmin, async (req, res) => {
-  try { const [statuses] = await db.query('SELECT code, description FROM ticket_status ORDER BY id'); res.json(statuses); } catch (error) { res.status(500).json({ error: 'Errore' }); }
+  try { const [results] = await db.query('CALL sp_get_ticket_statuses()'); res.json(results[0]); } catch (error) { res.status(500).json({ error: 'Errore' }); }
 });
 
 module.exports = router;

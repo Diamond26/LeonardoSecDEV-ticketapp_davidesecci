@@ -57,11 +57,8 @@ const notifyAdmins = async (notification) => {
 
     try {
         // Get all admin users
-        const [admins] = await db.query(
-            `SELECT u.id FROM user u 
-             JOIN user_type ut ON u.user_type_id = ut.id 
-             WHERE ut.code = 'ADMIN' AND u.is_active = 1`
-        );
+        const [result] = await db.query('CALL sp_get_admin_users()');
+        const admins = result[0];
 
         // Save notification for each admin using SP
         for (const admin of admins) {
