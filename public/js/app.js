@@ -10,7 +10,25 @@ if (navUsername) navUsername.textContent = auth.getUser().username;
 if (navRole) navRole.textContent = auth.isAdmin() ? 'ADMIN' : 'USER';
 
 const logoutBtn = document.getElementById('logoutBtn');
-if (logoutBtn) logoutBtn.addEventListener('click', () => auth.logout());
+if (logoutBtn) logoutBtn.addEventListener('click', () => {
+    notificationManager.disconnect();
+    auth.logout();
+});
+
+// Initialize Socket.IO notifications
+notificationManager.connect(auth.getToken());
+
+// Load historical notifications
+notificationManager.loadNotifications(auth.getToken());
+
+// Make loadTickets available globally for Socket.IO refresh
+window.loadTickets = function () {
+    if (auth.isAdmin()) {
+        loadAdminTickets();
+    } else {
+        loadDashboardTickets();
+    }
+};
 
 
 const templates = {
@@ -157,23 +175,35 @@ const templates = {
             <div id="successMessage" class="success-message"></div>
             <div id="ticketContent" class="loading">Caricamento ticket...</div>
             
+            
             <div id="messagesSection" style="display:none; margin-top: 2rem;">
                 <h3 style="color: var(--text-main); margin-bottom: 1.5rem; display:flex; align-items:center; gap:10px;">
-                    💬 Comunicazioni
+                    💬 Chat
                 </h3>
-                <div id="messagesList"></div>
                 
-                ${auth.isAdmin() ? `
-                <div class="card" style="margin-top: 1.5rem; border-color: var(--primary-start);">
-                    <h4 style="margin-bottom: 1rem;">Rispondi al ticket</h4>
-                    <form id="replyForm">
-                        <div class="form-group">
-                            <textarea id="replyMessage" placeholder="Scrivi una risposta per l'utente..." style="min-height: 100px;" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Invia Risposta</button>
-                    </form>
+                <!-- Chat Container -->
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- Messages will be rendered here -->
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <form id="chatForm" class="chat-form">
+                            <textarea 
+                                id="chatInput" 
+                                placeholder="Scrivi un messaggio..." 
+                                rows="2"
+                                maxlength="1000"
+                            ></textarea>
+                            <button type="submit" class="btn btn-primary chat-send-btn">
+                                <span>Invia</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
                 </div>
-                ` : ''}
             </div>
         </div>
     `,
@@ -577,46 +607,99 @@ function renderTicketDetail(ticket) {
     });
 
     const msgSection = document.getElementById('messagesSection');
-    const msgList = document.getElementById('messagesList');
     if (msgSection) {
         msgSection.style.display = 'block';
-        msgList.innerHTML = '';
-        if (ticket.messages && ticket.messages.length > 0) {
-            ticket.messages.forEach(m => {
-                const isAdminMsg = m.sender_role === 'ADMIN';
-                const div = document.createElement('div');
-                div.className = `msg-bubble ${isAdminMsg ? 'msg-admin' : 'msg-user'}`;
-                div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem; border-bottom:1px solid var(--glass-border); padding-bottom:0.5rem;">
-                        <span style="font-weight:700; color:${isAdminMsg ? '#818cf8' : '#fff'}">${m.sender} ${isAdminMsg ? '(Staff)' : ''}</span>
-                        <span>${formatDate(m.created_at)}</span>
-                    </div>
-                    <div>${m.message.replace(/\n/g, '<br>')}</div>
-                `;
-                msgList.appendChild(div);
+
+        // Initialize chat
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+
+            // Initialize chat - it will handle socket connection state internally
+            console.log('🚀 Initializing chat for ticket:', ticket.id);
+            chatManager.initialize(ticket.id, auth.getToken(), (messageData) => {
+                renderChatMessage(messageData);
             });
-        } else {
-            msgList.innerHTML = '<p style="color:var(--text-muted); font-style:italic; padding:1rem; text-align:center; background:var(--glass-bg); border-radius:8px;">Nessuna risposta presente.</p>';
         }
 
-        const replyForm = document.getElementById('replyForm');
-        if (replyForm) {
-            const newForm = replyForm.cloneNode(true);
-            replyForm.parentNode.replaceChild(newForm, replyForm);
-            newForm.addEventListener('submit', async (e) => {
+        // Handle chat form submission
+        const chatForm = document.getElementById('chatForm');
+        if (chatForm) {
+            const newForm = chatForm.cloneNode(true);
+            chatForm.parentNode.replaceChild(newForm, chatForm);
+
+            newForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const msg = document.getElementById('replyMessage').value;
-                if (!msg.trim()) return;
-                try {
-                    const res = await apiRequest(`/api/tickets/${ticket.id}/messages`, { method: 'POST', body: JSON.stringify({ message: msg }) });
-                    if (res.ok) {
-                        document.getElementById('replyMessage').value = '';  // Reset form
-                        await loadTicketDetail({ id: ticket.id });            // Reload messages
-                    }
-                } catch (e) { showError('Errore invio messaggio'); }
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+
+                if (message) {
+                    chatManager.sendMessage(message);
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
             });
+
+            // Auto-resize textarea
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('input', function () {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+                });
+
+                // Submit on Enter (Shift+Enter for new line)
+                chatInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        newForm.dispatchEvent(new Event('submit'));
+                    }
+                });
+            }
         }
     }
+}
+
+/**
+ * Render a chat message in the chat UI
+ * @param {object} messageData - Message data
+ */
+function renderChatMessage(messageData) {
+    console.log('🎨 renderChatMessage called with:', messageData);
+
+    const chatMessages = document.getElementById('chatMessages');
+    if (!chatMessages) {
+        console.error('❌ chatMessages element not found!');
+        return;
+    }
+
+    const isAdmin = messageData.isAdmin || messageData.sender_role === 'ADMIN';
+    const isCurrentUser = messageData.user_id === auth.getUser().id;
+
+    console.log('👤 Message from:', { isAdmin, isCurrentUser, username: messageData.username });
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${isCurrentUser ? 'user' : 'admin'}`;
+
+    // Get first letter of username for avatar
+    const username = messageData.username || messageData.sender || 'User';
+    const avatarLetter = username.charAt(0).toUpperCase();
+
+    messageDiv.innerHTML = `
+        <div class="chat-message-avatar">${avatarLetter}</div>
+        <div class="chat-message-content">
+            <div class="chat-message-meta">
+                <span class="chat-message-username">${username}${isAdmin ? ' (Staff)' : ''}</span>
+                <span class="chat-message-time">${chatManager.formatTime(messageData.created_at || messageData.timestamp)}</span>
+            </div>
+            <div class="chat-message-bubble">
+                ${messageData.message.replace(/\n/g, '<br>')}
+            </div>
+        </div>
+    `;
+
+    chatMessages.appendChild(messageDiv);
+    console.log('✅ Message rendered and appended to DOM');
 }
 
 

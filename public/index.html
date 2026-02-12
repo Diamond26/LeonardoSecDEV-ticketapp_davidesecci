@@ -21,6 +21,23 @@
       </div>
     </div>
     <div class="d-flex" style="display:flex; align-items:center; gap:10px;">
+      <!-- Notification Bell -->
+      <div class="notification-bell" id="notificationBell" onclick="notificationManager.toggleDropdown()">
+        <span class="notification-bell-icon">🔔</span>
+        <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+      </div>
+
+      <!-- Notification Dropdown -->
+      <div class="notification-dropdown" id="notificationDropdown">
+        <div class="notification-header">
+          <h3 style="margin-left: 8px;">Notifiche</h3>
+          <button class="mark-all-read" onclick="notificationManager.markAllAsRead()">Segna tutte lette</button>
+        </div>
+        <div class="notification-list">
+          <div class="notification-empty">Nessuna notifica</div>
+        </div>
+      </div>
+
       <a href="index.html" class="btn btn-secondary">Dashboard</a>
 
       <button class="btn btn-danger" id="logoutBtn">Logout</button>
@@ -28,6 +45,11 @@
   </nav>
 
   <div id="app-content"></div>
+
+  <!-- Socket.IO Client -->
+  <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/chat.js"></script>
 
   <script src="js/auth.js"></script>
   <script src="js/router.js"></script>
