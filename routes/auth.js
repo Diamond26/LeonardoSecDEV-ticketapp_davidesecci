@@ -12,7 +12,7 @@ router.post('/register', authenticateToken, async (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: 'Password deve essere almeno 6 caratteri' });
     if (!['USER', 'ADMIN'].includes(user_type)) return res.status(400).json({ error: 'Tipo utente non valido' });
     const password_hash = await bcrypt.hash(password, 10);
-    const [rows] = await db.query('CALL register_jwt(?, ?, ?)', [username, password_hash, user_type]);
+    const [rows] = await db.query('CALL register_user(?, ?, ?)', [username, password_hash, user_type]);
     const user_id = rows[0][0].user_id;
 
     await logActivityFromRequest(req, {
@@ -36,7 +36,8 @@ router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Credenziali non valide' });
-    const [users] = await db.query('SELECT u.id, u.username, u.password_hash, u.is_active, ut.code as user_type_code FROM user u JOIN user_type ut ON u.user_type_id = ut.id WHERE u.username = ?', [username]);
+    const [usersResult] = await db.query('CALL sp_get_user_by_username(?)', [username]);
+    const users = usersResult[0];
     if (users.length === 0) {
       await logActivityFromRequest(req, {
         userId: null,
@@ -159,12 +160,12 @@ router.patch('/users/:id', authenticateToken, async (req, res) => {
     if (isNaN(userId)) return res.status(400).json({ error: 'ID utente non valido' });
     if (username && (username.length < 3 || username.length > 50)) return res.status(400).json({ error: 'Username deve essere tra 3 e 50 caratteri' });
     if (user_type && !['USER', 'ADMIN'].includes(user_type)) return res.status(400).json({ error: 'Tipo utente non valido' });
-    const [existingUsers] = await db.query('SELECT id, username, is_active FROM `user` WHERE id = ?', [userId]);
-    if (existingUsers.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
-    const oldUser = existingUsers[0];
-    if (username) { const [duplicates] = await db.query('SELECT id FROM `user` WHERE username = ? AND id != ?', [username, userId]); if (duplicates.length > 0) return res.status(400).json({ error: 'Username già in uso' }); }
+    const [users] = await db.query('CALL sp_get_user_by_id_admin(?)', [userId]);
+    if (users.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
+    const oldUser = users[0];
+    if (username) { const [duplicates] = await db.query('CALL sp_check_username_duplicate(?, ?)', [username, userId]); if (duplicates[0].length > 0) return res.status(400).json({ error: 'Username già in uso' }); }
     let userTypeId = null;
-    if (user_type) { const [userTypes] = await db.query('SELECT id FROM user_type WHERE code = ?', [user_type]); if (userTypes.length === 0) return res.status(500).json({ error: 'Tipo utente non trovato' }); userTypeId = userTypes[0].id; }
+    if (user_type) { const [userTypes] = await db.query('CALL sp_get_user_type_id(?)', [user_type]); if (userTypes[0].length === 0) return res.status(500).json({ error: 'Tipo utente non trovato' }); userTypeId = userTypes[0][0].id; }
     if (username === undefined && userTypeId === null && typeof is_active !== 'boolean') return res.status(400).json({ error: 'Nessun campo da aggiornare' });
     await db.query('CALL update_user(?, ?, ?, ?)', [userId, username ?? null, userTypeId, typeof is_active === 'boolean' ? is_active : null]);
 
@@ -192,7 +193,7 @@ router.patch('/users/:id/password', authenticateToken, async (req, res) => {
     const userId = parseInt(req.params.id), { new_password } = req.body;
     if (isNaN(userId)) return res.status(400).json({ error: 'ID utente non valido' });
     if (!new_password || new_password.length < 6) return res.status(400).json({ error: 'Password deve essere almeno 6 caratteri' });
-    const [users] = await db.query('SELECT id, username FROM user WHERE id = ?', [userId]);
+    const [users] = await db.query('CALL sp_get_user_by_id_admin(?)', [userId]);
     if (users.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
     const targetUser = users[0];
     const password_hash = await bcrypt.hash(new_password, 10);
@@ -220,9 +221,9 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
     const userId = parseInt(req.params.id);
     if (isNaN(userId)) return res.status(400).json({ error: 'ID utente non valido' });
     if (userId === req.user.id) return res.status(400).json({ error: 'Non puoi eliminare il tuo account' });
-    const [users] = await db.query('SELECT id, username FROM user WHERE id = ?', [userId]);
-    if (users.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
-    const deletedUser = users[0];
+    const [users] = await db.query('CALL sp_get_user_by_id_admin(?)', [userId]);
+    if (users[0].length === 0) return res.status(404).json({ error: 'Utente non trovato' });
+    const deletedUser = users[0][0];
     await db.query('CALL delete_user(?)', [userId]);
 
     await logActivityFromRequest(req, {

@@ -1,138 +1,158 @@
 # 🔐 SecureCorp – Ticketing System
 
-Sistema di ticketing web Versione One-Page (SPA style) con autenticazione JWT, ruoli utente/admin e API REST.
-Frontend in HTML/CSS/JavaScript, backend in Node.js (Express) con database MySQL.
+Sistema di ticketing web **One-Page (SPA style)** con autenticazione JWT, gestione ruoli utente/admin e API REST.  
+Frontend in HTML/CSS/JavaScript, backend in **Node.js (Express)** con database **MySQL**.
 
 ---
 
-## Avvio rapido
+## 🚀 Avvio rapido
 
-1. Installa le dipendenze:
+### 1. Installa le dipendenze
+
+```bash
 npm install
-npm install http-ajax
+```
 
-2. Inizializza il database:
-mysql -u root -p < db_setup.sql
+### 2. Inizializza il database
 
-3. Crea il file .env (vedi sezione sotto)
+```bash
+mysql -u root -p < database.sql
+```
 
-4. Avvia il server:
-npm app.js
+### 3. Crea il file `.env`
 
-Apri il browser su:
-http://localhost:3000
+Vedi la sezione [Configurazione](#-configurazione-env) qui sotto.
 
----
+### 4. Avvia il server
 
-## Configurazione (.env)
+```bash
+# Produzione
+npm start
 
-DB_HOST=localhost  
-DB_USER=securecorp_user  
-DB_PASSWORD=SecurePassword123!  
-DB_NAME=securecorp  
-DB_PORT=3306  
+# Sviluppo (con auto-reload)
+npm run dev
+```
 
-JWT_SECRET=change-this-in-production  
-JWT_ACCESS_EXPIRATION=15m  
-JWT_REFRESH_EXPIRATION=7d  
-
-PORT=3000  
-NODE_ENV=development  
-
-In produzione è necessario cambiare JWT_SECRET, le credenziali MySQL e usare HTTPS.
+Apri il browser su: **http://localhost:3000**
 
 ---
 
-## Credenziali di test
+## ⚙️ Configurazione (.env)
 
-Admin  
-username: admin  
-password: admin  
-pagina: /admin.html  
+```env
+DB_HOST=localhost
+DB_USER=securecorp_user
+DB_PASSWORD=SecurePassword123!
+DB_NAME=securecorp
+DB_PORT=3306
 
-Utente  
-username: utente  
-password: utente  
-pagina: /dashboard.html  
+JWT_SECRET=change-this-in-production
+JWT_ACCESS_EXPIRATION=15m
+JWT_REFRESH_EXPIRATION=7d
+
+PORT=3000
+NODE_ENV=development
+```
+
+> ⚠️ In produzione: cambia `JWT_SECRET`, le credenziali MySQL e usa **HTTPS**.
 
 ---
 
-## API
+## 🧪 Credenziali di test
 
-Autenticazione:
-POST /api/auth/login  
-POST /api/auth/refresh  
-POST /api/auth/logout  
-POST /api/auth/register (solo admin)  
+| Ruolo | Username | Password | Pagina |
+|-------|----------|----------|--------|
+| Admin | `admin` | `admin` | `/template/admin.html` |
+| Utente | `utente` | `utente` | `/template/dashboard.html` |
 
-Ticket:
-GET /api/tickets  
-GET /api/tickets/:id  
-POST /api/tickets  
-PATCH /api/tickets/:id (solo proprietario se OPEN)  
-PATCH /api/tickets/:id/status (solo admin)  
-GET /api/tickets/meta/types  
+---
 
-Header richiesto:
+## 📡 API
+
+### Autenticazione
+
+| Metodo | Endpoint | Accesso |
+|--------|----------|---------|
+| `POST` | `/api/auth/login` | Pubblico |
+| `POST` | `/api/auth/refresh` | Pubblico |
+| `POST` | `/api/auth/logout` | Autenticato |
+| `POST` | `/api/auth/register` | Solo admin |
+
+### Ticket
+
+| Metodo | Endpoint | Accesso |
+|--------|----------|---------|
+| `GET` | `/api/tickets` | Autenticato |
+| `GET` | `/api/tickets/:id` | Autenticato |
+| `POST` | `/api/tickets` | Autenticato |
+| `PATCH` | `/api/tickets/:id` | Proprietario (stato `OPEN`) |
+| `PATCH` | `/api/tickets/:id/status` | Solo admin |
+| `GET` | `/api/tickets/meta/types` | Autenticato |
+
+**Header richiesto per tutte le rotte protette:**
+
+```
 Authorization: Bearer <accessToken>
+```
 
 ---
 
-## Funzionalità Utente Standard
+## 👤 Funzionalità Utente Standard
 
-- Login
+- Login / Logout
 - Visualizzazione dei propri ticket
-- Creazione ticket
-- Modifica ticket solo se stato OPEN
-- Logout
+- Creazione di nuovi ticket
+- Modifica ticket (solo se in stato `OPEN`)
+- Notifiche in tempo reale via Socket.io
 
 ---
 
-## Funzionalità Amministratore
+## 🛡️ Funzionalità Amministratore
 
-- Visualizza tutti i ticket
-- Cambia stato ticket (OPEN, IN_PROGRESS, CLOSED)
+- Visualizzazione di tutti i ticket
+- Cambio stato ticket (`OPEN` → `IN_PROGRESS` → `CLOSED`)
 - Gestione utenti:
-  - creazione
-  - modifica
-  - cambio password
-  - eliminazione (non se stesso)
+  - Creazione
+  - Modifica
+  - Cambio password
+  - Eliminazione (non se stesso)
 
 ---
 
-## Sicurezza
+## 🔒 Sicurezza
 
-- Autenticazione JWT (access token + refresh token)
-- Password hashate con bcrypt
-- Query SQL parametrizzate
-- Prevenzione XSS tramite textContent
+- Autenticazione JWT (access token 15m + refresh token 7d)
+- Password hashate con **bcryptjs**
+- Query SQL parametrizzate (prevenzione SQL injection)
+- Prevenzione XSS tramite `textContent`
 - Rate limiting su login e refresh
-- Helmet e CORS
-- Controllo ruoli user/admin
+- **Helmet** (HTTP security headers) e **CORS**
+- Controllo ruoli `user` / `admin` su ogni route
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
-MySQL non parte → avvia il servizio MySQL  
-Access denied MySQL → controlla credenziali nel .env  
-Cannot find module → esegui npm install  
-Token non valido → verifica JWT_SECRET  
-Accesso admin negato → login come admin  
+| Problema | Soluzione |
+|----------|-----------|
+| MySQL non parte | Avvia il servizio MySQL |
+| `Access denied` MySQL | Controlla le credenziali nel `.env` |
+| `Cannot find module` | Esegui `npm install` |
+| Token non valido | Verifica `JWT_SECRET` nel `.env` |
+| Accesso admin negato | Effettua il login come admin |
 
 ---
 
-## Tecnologie usate
+## 📦 Tecnologie usate
 
-Node.js  
-Express  
-MySQL  
-JWT  
-bcrypt  
-dotenv  
-helmet  
-cors  
-express-rate-limit  
-AJAX
-
-
+| Categoria | Tecnologie |
+|-----------|-----------|
+| Runtime | Node.js |
+| Framework | Express |
+| Database | MySQL (`mysql2`) |
+| Autenticazione | JWT (`jsonwebtoken`), bcryptjs |
+| Real-time | Socket.io |
+| Sicurezza | Helmet, CORS, express-rate-limit |
+| Utility | dotenv, uuid |
+| Dev | nodemon |
+| Frontend | HTML, CSS, JavaScript (AJAX) |

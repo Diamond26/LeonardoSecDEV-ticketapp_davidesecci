@@ -66,8 +66,8 @@ router.get('/logs', authenticateToken, isAdmin, async (req, res) => {
 
 router.get('/logs/actions', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const [actions] = await db.query('SELECT DISTINCT action FROM activity_logs ORDER BY action');
-        res.json(actions.map(a => a.action));
+        const [actions] = await db.query('CALL sp_get_activity_log_actions()');
+        res.json(actions[0].map(a => a.action));
     } catch (error) {
         console.error('❌ Errore recupero azioni:', error);
         res.status(500).json({ error: 'Errore durante il recupero delle azioni' });
@@ -76,8 +76,8 @@ router.get('/logs/actions', authenticateToken, isAdmin, async (req, res) => {
 
 router.get('/logs/entity-types', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const [entityTypes] = await db.query('SELECT DISTINCT entity_type FROM activity_logs WHERE entity_type IS NOT NULL ORDER BY entity_type');
-        res.json(entityTypes.map(e => e.entity_type));
+        const [entityTypes] = await db.query('CALL sp_get_activity_log_entity_types()');
+        res.json(entityTypes[0].map(e => e.entity_type));
     } catch (error) {
         console.error('❌ Errore recupero entity types:', error);
         res.status(500).json({ error: 'Errore durante il recupero dei tipi di entità' });

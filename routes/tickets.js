@@ -119,7 +119,8 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     if (ticket.user_id !== req.user.id) return res.status(403).json({ error: 'Non autorizzato a modificare questo ticket' });
     if (ticket.status !== 'OPEN') return res.status(400).json({ error: 'Puoi modificare solo ticket aperti' });
 
-    await db.query('UPDATE ticket SET title = ?, description = ? WHERE id = ?', [title, description, ticketId]);
+    // Update using Stored Procedure
+    await db.query('CALL sp_update_ticket_details(?, ?, ?)', [ticketId, title, description]);
 
     await logActivityFromRequest(req, {
       userId: req.user.id,
